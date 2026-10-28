@@ -49,12 +49,13 @@ export class AuthController {
   ): Promise<void> => {
     try {
       const token = req.sessionToken;
-      if (!token) {
+      const user = req.user;
+      if (!token || !user) {
         res.status(401).json({ success: false, message: "Unauthorized" });
         return;
       }
 
-      await this.authService.logout(token);
+      await this.authService.logout(token, String(user._id));
       res.status(200).json({ success: true, message: "Logged out" });
     } catch (err) {
       next(err);

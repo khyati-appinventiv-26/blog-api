@@ -1,7 +1,8 @@
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
-import { SESSION_DAYS } from "../../constants";
+import { RedisKeys, RedisTTL, SESSION_DAYS } from "../../constants";
 import { AppError } from "../../utils/AppError";
+import { cache } from "../../utils/redisCache";
 import { UserRepository } from "../../Repository/UserRepository";
 import { SessionRepository } from "../../Repository/SessionRepository";
 import { IUser } from "../../model/User";
@@ -68,15 +69,21 @@ export class AuthService {
     const email = this.requireEmail(input.email);
     const password = this.requirePassword(input.password);
 
+    await this.assertNotRateLimited(email);
+
     const user = await this.users.findByEmailWithPassword(email);
     if (!user) {
+      await this.recordFailedLogin(email);
       throw new AppError("Invalid email or password", 401);
     }
 
     const match = await bcrypt.compare(password, user.password);
     if (!match) {
+      await this.recordFailedLogin(email);
       throw new AppError("Invalid email or password", 401);
     }
+
+    await cache.delKeys(RedisKeys.loginFail(email));
 
     const token = crypto.randomBytes(32).toString("hex");
     const expiresAt = new Date(
@@ -90,15 +97,64 @@ export class AuthService {
       userAgent: input.userAgent || "",
     });
 
+    const userId = String(user._id);
+    const ttlSeconds = Math.max(
+      1,
+      Math.floor((expiresAt.getTime() - Date.now()) / 1000)
+    );
+    await cache.setString(RedisKeys.session(token), userId, ttlSeconds);
+    await cache.sadd(RedisKeys.userSessions(userId), token);
+
     return { user: this.toPublicUser(user), token, expiresAt };
   }
 
-  public async logout(token: string): Promise<void> {
+  public async logout(token: string, userId: string): Promise<void> {
     await this.sessions.deleteByToken(token);
+    await cache.delKeys(RedisKeys.session(token));
+    await cache.srem(RedisKeys.userSessions(userId), token);
   }
 
   public async logoutAll(userId: string): Promise<void> {
+    const tokens = await cache.smembers(RedisKeys.userSessions(userId));
+    const sessions = await this.sessions.findAllByUserId(userId);
+    const allTokens = new Set([
+      ...tokens,
+      ...sessions.map((s) => s.token),
+    ]);
+
     await this.sessions.deleteAllByUserId(userId);
+
+    for (const token of allTokens) {
+      await cache.delKeys(RedisKeys.session(token));
+    }
+    await cache.delKeys(RedisKeys.userSessions(userId));
+  }
+
+  private async assertNotRateLimited(email: string): Promise<void> {
+    try {
+      const key = RedisKeys.loginFail(email);
+      const raw = await cache.getString(key);
+      const count = raw === null ? 0 : Number(raw);
+
+      if (count >= 5) {
+        const ttl = await cache.ttl(key);
+        const minutes = Math.max(1, Math.ceil(ttl / 60));
+        throw new AppError(
+          `Too many login attempts. Try again in ${minutes} minutes`,
+          429
+        );
+      }
+    } catch (err) {
+      if (err instanceof AppError) throw err;
+    }
+  }
+
+  private async recordFailedLogin(email: string): Promise<void> {
+    const key = RedisKeys.loginFail(email);
+    const count = await cache.incr(key);
+    if (count === 1) {
+      await cache.expire(key, RedisTTL.loginFail);
+    }
   }
 
   private requireName(value: unknown): string {
