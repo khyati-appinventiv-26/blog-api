@@ -7,6 +7,7 @@ import express, {
 import { HealthRoutes } from "./Modules/Health/HealthRoutes";
 import { AuthRoutes } from "./Modules/Auth/AuthRoutes";
 import { UserRoutes } from "./Modules/Users/UserRoutes";
+import { PostRoutes } from "./Modules/Posts/PostRoutes";
 import { ErrorHandler } from "./middlewares/errorHandler";
 
 export class App {
@@ -25,6 +26,7 @@ export class App {
     this.app.use("/api", new HealthRoutes().router);
     this.app.use("/api/auth", new AuthRoutes().router);
     this.app.use("/api/users", new UserRoutes().router);
+    this.app.use("/api/posts", new PostRoutes().router);
 
     this.app.use(
       (err: unknown, req: Request, res: Response, next: NextFunction) =>
