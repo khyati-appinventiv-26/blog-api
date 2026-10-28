@@ -31,10 +31,11 @@ export class PostController {
     next: NextFunction
   ): Promise<void> => {
     try {
-      const data = await this.postService.getPublishedById(
+      const result = await this.postService.getPublishedById(
         this.paramId(req.params.id)
       );
-      res.status(200).json({ success: true, data });
+      res.setHeader("X-Cache", result.cache);
+      res.status(200).json({ success: true, data: result.data });
     } catch (err) {
       next(err);
     }
@@ -83,6 +84,7 @@ export class PostController {
   ): Promise<void> => {
     try {
       const result = await this.postService.listPublished(req.query);
+      res.setHeader("X-Cache", result.cache);
       res.status(200).json({
         success: true,
         data: result.data,

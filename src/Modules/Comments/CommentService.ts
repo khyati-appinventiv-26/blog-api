@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { AppError } from "../../utils/AppError";
+import { invalidatePostCaches } from "../../utils/postCache";
 import { CommentRepository } from "../../Repository/CommentRepository";
 import { PostRepository } from "../../Repository/PostRepository";
 import { IComment } from "../../model/Comment";
@@ -125,8 +126,8 @@ export class CommentService {
     await this.onCommentChanged(String(comment.postId));
   }
 
-  protected async onCommentChanged(_postId: string): Promise<void> {
-    return;
+  protected async onCommentChanged(postId: string): Promise<void> {
+    await invalidatePostCaches(postId);
   }
 
   private requireText(value: unknown): string {

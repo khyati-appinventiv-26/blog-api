@@ -1,6 +1,8 @@
 import mongoose from "mongoose";
-import { PostSort } from "../../constants";
+import { PostSort, RedisKeys, RedisTTL } from "../../constants";
 import { AppError } from "../../utils/AppError";
+import { cache } from "../../utils/redisCache";
+import { invalidatePostCaches } from "../../utils/postCache";
 import { PostRepository } from "../../Repository/PostRepository";
 import { CommentRepository } from "../../Repository/CommentRepository";
 import { IPost, PostStatus } from "../../model/Post";
@@ -70,18 +72,28 @@ export class PostService {
       status,
     });
 
+    await cache.incr(RedisKeys.postListVersion());
     return this.toPublicPost(post);
   }
 
-  public async getPublishedById(id: string): Promise<PublicPost> {
+  public async getPublishedById(
+    id: string
+  ): Promise<{ data: PublicPost; cache: "HIT" | "MISS" }> {
     this.assertObjectId(id);
+
+    const cached = await cache.getJSON<PublicPost>(RedisKeys.post(id));
+    if (cached) {
+      return { data: cached, cache: "HIT" };
+    }
 
     const post = await this.posts.findById(id);
     if (!post || post.status !== "published") {
       throw new AppError("Post not found", 404);
     }
 
-    return this.toPublicPost(post);
+    const publicPost = this.toPublicPost(post);
+    await cache.setJSON(RedisKeys.post(id), publicPost, RedisTTL.post);
+    return { data: publicPost, cache: "MISS" };
   }
 
   public async update(
@@ -129,6 +141,7 @@ export class PostService {
       throw new AppError("Post not found", 404);
     }
 
+    await invalidatePostCaches(id);
     return this.toPublicPost(updated);
   }
 
@@ -145,6 +158,7 @@ export class PostService {
 
     await this.comments.deleteByPostId(id);
     await this.posts.deleteById(id);
+    await invalidatePostCaches(id);
   }
 
   public async listMine(user: IUser): Promise<PublicPost[]> {
@@ -166,6 +180,7 @@ export class PostService {
       total: number;
       totalPages: number;
     };
+    cache: "HIT" | "MISS";
   }> {
     const page = this.parsePage(raw.page);
     const limit = this.parseLimit(raw.limit);
@@ -175,6 +190,32 @@ export class PostService {
       typeof raw.tag === "string" ? raw.tag.trim().toLowerCase() : "";
     const sort = this.parseSort(raw.sort);
 
+    const versionRaw = await cache.getString(RedisKeys.postListVersion());
+    const version = versionRaw === null ? 0 : Number(versionRaw) || 0;
+    const cacheKey = RedisKeys.postList({
+      version,
+      page,
+      limit,
+      search,
+      tag,
+      sort,
+    });
+
+    type ListPayload = {
+      data: Array<Record<string, unknown>>;
+      pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        totalPages: number;
+      };
+    };
+
+    const cached = await cache.getJSON<ListPayload>(cacheKey);
+    if (cached) {
+      return { ...cached, cache: "HIT" };
+    }
+
     const { posts, total } = await this.posts.listPublished({
       page,
       limit,
@@ -183,7 +224,7 @@ export class PostService {
       sort,
     });
 
-    return {
+    const payload: ListPayload = {
       data: posts,
       pagination: {
         page,
@@ -192,6 +233,9 @@ export class PostService {
         totalPages: total === 0 ? 0 : Math.ceil(total / limit),
       },
     };
+
+    await cache.setJSON(cacheKey, payload, RedisTTL.postList);
+    return { ...payload, cache: "MISS" };
   }
 
   private requireTitle(value: unknown): string {
