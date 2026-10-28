@@ -9,6 +9,7 @@ import { AuthRoutes } from "./Modules/Auth/AuthRoutes";
 import { UserRoutes } from "./Modules/Users/UserRoutes";
 import { PostRoutes } from "./Modules/Posts/PostRoutes";
 import { CommentRoutes } from "./Modules/Comments/CommentRoutes";
+import { StatsRoutes } from "./Modules/Stats/StatsRoutes";
 import { ErrorHandler } from "./middlewares/errorHandler";
 
 export class App {
@@ -29,6 +30,7 @@ export class App {
     this.app.use("/api/users", new UserRoutes().router);
     this.app.use("/api/posts", new PostRoutes().router);
     this.app.use("/api/comments", new CommentRoutes().router);
+    this.app.use("/api/stats", new StatsRoutes().router);
 
     this.app.use(
       (err: unknown, req: Request, res: Response, next: NextFunction) =>
