@@ -23,6 +23,13 @@ npm run dev
 
 Scripts: `dev`, `build`, `start`.
 
+## API docs (Swagger)
+
+- UI: http://localhost:3000/api/docs
+- OpenAPI JSON: http://localhost:3000/api/docs.json
+
+Use **Authorize** in Swagger with the token from login (`Bearer <token>`).
+
 ## Auth
 
 ```http

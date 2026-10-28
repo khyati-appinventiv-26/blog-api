@@ -10,6 +10,7 @@ import { UserRoutes } from "./Modules/Users/UserRoutes";
 import { PostRoutes } from "./Modules/Posts/PostRoutes";
 import { CommentRoutes } from "./Modules/Comments/CommentRoutes";
 import { StatsRoutes } from "./Modules/Stats/StatsRoutes";
+import { SwaggerDocs } from "./docs/SwaggerDocs";
 import { ErrorHandler } from "./middlewares/errorHandler";
 
 export class App {
@@ -31,6 +32,7 @@ export class App {
     this.app.use("/api/posts", new PostRoutes().router);
     this.app.use("/api/comments", new CommentRoutes().router);
     this.app.use("/api/stats", new StatsRoutes().router);
+    SwaggerDocs.mount(this.app);
 
     this.app.use(
       (err: unknown, req: Request, res: Response, next: NextFunction) =>
