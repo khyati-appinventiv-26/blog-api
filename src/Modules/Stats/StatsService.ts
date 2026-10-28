@@ -1,16 +1,34 @@
+import { RedisKeys, RedisTTL } from "../../constants";
+import { cache } from "../../utils/redisCache";
 import { Post } from "../../model/Post";
+
+export type StatsPayload = {
+  totalPublishedPosts: number;
+  topTags: Array<{ tag: string; count: number }>;
+  topAuthors: Array<{ authorId: string; name: string; posts: number }>;
+  topCommentedPosts: Array<{
+    id: string;
+    title: string;
+    commentCount: number;
+  }>;
+};
 
 export class StatsService {
   public async getStats(): Promise<{
-    totalPublishedPosts: number;
-    topTags: Array<{ tag: string; count: number }>;
-    topAuthors: Array<{ authorId: string; name: string; posts: number }>;
-    topCommentedPosts: Array<{
-      id: string;
-      title: string;
-      commentCount: number;
-    }>;
+    data: StatsPayload;
+    cache: "HIT" | "MISS";
   }> {
+    const cached = await cache.getJSON<StatsPayload>(RedisKeys.stats());
+    if (cached) {
+      return { data: cached, cache: "HIT" };
+    }
+
+    const data = await this.aggregateStats();
+    await cache.setJSON(RedisKeys.stats(), data, RedisTTL.stats);
+    return { data, cache: "MISS" };
+  }
+
+  private async aggregateStats(): Promise<StatsPayload> {
     const [result] = await Post.aggregate([
       { $match: { status: "published" } },
       {
