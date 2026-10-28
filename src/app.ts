@@ -5,8 +5,8 @@ import express, {
   Response,
 } from "express";
 import cookieParser from "cookie-parser";
-import { HealthRoutes } from "../Modules/Health/HealthRoutes";
-import { ErrorHandler } from "../middlewares/ErrorHandler";
+import { HealthRoutes } from "./Modules/Health/HealthRoutes";
+import { ErrorHandler } from "./middlewares/ErrorHandler";
 
 export class App {
   private readonly app: Express;
