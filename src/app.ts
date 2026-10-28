@@ -4,9 +4,10 @@ import express, {
   Request,
   Response,
 } from "express";
-import cookieParser from "cookie-parser";
 import { HealthRoutes } from "./Modules/Health/HealthRoutes";
-import { ErrorHandler } from "./middlewares/ErrorHandler";
+import { AuthRoutes } from "./Modules/Auth/AuthRoutes";
+import { UserRoutes } from "./Modules/Users/UserRoutes";
+import { ErrorHandler } from "./middlewares/errorHandler";
 
 export class App {
   private readonly app: Express;
@@ -20,10 +21,10 @@ export class App {
 
   private setup(): void {
     this.app.use(express.json());
-    this.app.use(cookieParser());
 
-    const healthRoutes = new HealthRoutes();
-    this.app.use("/api", healthRoutes.router);
+    this.app.use("/api", new HealthRoutes().router);
+    this.app.use("/api/auth", new AuthRoutes().router);
+    this.app.use("/api/users", new UserRoutes().router);
 
     this.app.use(
       (err: unknown, req: Request, res: Response, next: NextFunction) =>

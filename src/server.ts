@@ -1,7 +1,6 @@
 import { config } from "./constants";
 import { App } from "./app";
 import { Database } from "./providers/database/Database";
-import { redisProvider } from "./providers/redis/RedisProvider";
 
 class Server {
   private readonly app: App;
@@ -14,7 +13,6 @@ class Server {
 
   public async start(): Promise<void> {
     await this.database.connect();
-    await redisProvider.connect();
 
     this.app.getExpressApp().listen(config.port, () => {
       console.log(`Server listening on port ${config.port}`);
